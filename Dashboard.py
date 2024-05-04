@@ -2,8 +2,6 @@ from dash import Dash, dcc, html, Input, Output, callback
 import os
 import numpy as np
 import pandas as pd
-import matplotlib  
-import matplotlib.pyplot as plt
 from ChannelAttribution import *
 import plotly.io as pio
 import plotly.express as px
