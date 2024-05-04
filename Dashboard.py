@@ -33,13 +33,11 @@ df = df.reset_index()
 df = df[df['first_touch'].isin(['Awareness Search Ads'])]
 
 ### ----- ----- ----- -----
-## Dash 
-### elements
+### ----- Dash ----- ----- 
+### ----- elements ----- ----- 
 ### ----- ----- ----- -----
 
-external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-
-app = Dash(__name__, external_stylesheets=external_stylesheets)
+app = Dash(__name__)
 
 server = app.server
 
