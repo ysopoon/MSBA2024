@@ -38,8 +38,10 @@ df = df[df['first_touch'].isin(['Awareness Search Ads'])]
 ### ----- ----- ----- -----
 
 app = Dash(__name__)
-
 server = app.server
+
+
+
 
 header = html.Div([
     html.Div(children='Budget Allocation Analysis for Nintendo on Amazon platform', 
@@ -328,4 +330,5 @@ def update_sankey(First, Last, conv):
     
     return fig
 
-app.run_server()
+if __name__ == "__main__":
+    app.run_server(host="0.0.0.0")
