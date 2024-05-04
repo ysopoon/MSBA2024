@@ -1,3 +1,4 @@
 Dash==2.6.0
 pandas
+ChannelAttribution
 gunicorn
