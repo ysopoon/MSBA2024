@@ -6,15 +6,35 @@ from ChannelAttribution import *
 import plotly.io as pio
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-
+### ----- ----- ----- -----
+## NYU Color Palette
+## https://www.nyu.edu/employees/resources-and-services/media-and-communications/nyu-brand-guidelines/designing-in-our-style/nyu-colors.html
+### ----- ----- ----- -----
 colors = {
-    'background': '#eee6f3',
+    'background': '#ffffff', #white
+    'plot_bg': '#ffffff', #white
+    'plot_bg_2': '#eee6f3', #Light Violet 2
     'header': '#57068c', 
     'text': '#000000'
 }
 
-# load the data
+conv_colors = { 
+    'conversion': "#8900e1", #Ultra Violet
+    'non-conversion' : "#b8b8b8",  #Medium Gray 2
+}
+
+model_colors = {
+    'markov_model':'#8900e1', #Ultra Violet
+    'linear_touch':'#6d6d6d', #Medium Gray 1
+    'last_touch':'#b8b8b8', #Medium Gray 2
+    'first_touch':'#d6d6d6', # Medium Gray 3
+}
+
+### ----- ----- ----- ----- -----
+### -----  load the data -----
+### ----- ----- ----- ----- -----
 Data = pd.read_csv('MTA_Input.csv')
 channel = pd.read_csv("NintendoMapping.csv")
 
@@ -32,15 +52,37 @@ df['cnt'] = df.conv + df.nonconv
 df = df.reset_index()
 df = df[df['first_touch'].isin(['Awareness Search Ads'])]
 
-### ----- ----- ----- -----
-### ----- Dash ----- ----- 
-### ----- elements ----- ----- 
-### ----- ----- ----- -----
+# function to convert str_path to the required format for ChannelAttribute
+def str_to_path(str_path):
+## creat mapping for channel names
+    channel_map = {'A_FTV-DIS':'Awareness Fire TV Display Ads',
+    'A_SA': 'Awareness Search Ads',
+    'C_OLV': 'Consideration Online Video Ads',
+    'C_DSP-DIS': 'Consideration DSP Display Ads',
+    'P_DSP-DIS': 'Purchase DSP Display Ads',
+    'P_SP': 'Purchase Sponsored Products Ads',
+    'P_OO-SA': 'Purchase O&O Search Ads'}
+
+    touchpoints = str_path.split("@")
+    arr = [None] * len(touchpoints)
+    for tp in touchpoints:
+        i, ch = tp.split('&')
+        i = int(i) - 1
+        arr[i] = channel_map[ch]
+    return " > ".join(str(x) for x in arr)
+
+## replace path_clean with the format for ChannelAttibute
+Data["path_clean"] = Data.str_path.apply(str_to_path)
+
+
+
+### ----- ----- ----- ----- -----
+### ----- ----- Dash ----- ----- 
+### ----- ----- elements ----- ----- 
+### ----- ----- ----- ----- -----
 
 app = Dash(__name__)
 server = app.server
-
-
 
 
 header = html.Div([
@@ -61,73 +103,36 @@ header = html.Div([
 
 
 
-
-def summary_box(cnt, unit):
-    box = html.Div([
-        html.H2(cnt), 
-        html.P(unit)
-    ], style={'text-align': 'center'})
-    return box
-
-
-def summary_box_w_graph(cnt, unit, graph_id):
-    box = html.Div([
-        summary_box(cnt, unit), 
-        dcc.Graph(id = graph_id, style={'width':'250px','height':'250px'}),
-        html.Br(),
-    ], style={'border':"2px black solid",
-              'border-radius': '15px'}
-    )
-    return html.Div(box,style={'border':"7px #eee6f3 solid"})
-
 ### ----- ----- ----- -----
 ### ----- layout tabs -----
 ### ----- ----- ----- -----
 
 ## tab for overall summary
-pie_graphs = html.Div([
-    summary_box_w_graph(
-        Data.converters.sum(),
-        "conversion",
-        'fig_conv_count'
-    ),
-    summary_box_w_graph(
-        Data.promotion.sum(), 
-        "Promotion",
-        'fig_prom_count'
-    ),
-    summary_box_w_graph(
-        Data.web.sum(), 
-        "Web users",
-        'fig_brow_count'
-    ),
-], style={'display': 'flex', 'flexDirection': 'row'},  
-)
-
 Tab_summary = html.Div(
     id = 'tab-summary',
     children = [
         html.Div(
             id = 'total_overview', 
-            children=[
-                summary_box(total_journey, 'shopping journeies'),
-                pie_graphs,
-            ],
+            children=[dcc.Graph(id = 'fig_conv_count')],
+            style={'border':"2px black solid",'border-radius': '10px', 
+                   #'width': '300px'
+                   }
         ),
         html.Div(
             id = 'path_overview', 
             children = [
-                dcc.Graph(id = 'fig_histogram', style={'width':'500px'}),
+                dcc.Graph(id = 'fig_group_channel_cnt', 
+                          style={ 'height':'800px' }#'width':'1024px'}
+                          ),
             ]
         ), 
     ], 
-    style={'display': 'flex',  'flexDirection': 'row'}, 
+    #style={'display': 'flex',  'flexDirection': 'row'}, 
 )
 
 
 ## Tab for analysis by first/last touch
 ## see call back function below
-
 F_L_filter = html.Div([
     dcc.RadioItems(
         options = ['First Touch', 'Last Touch'], 
@@ -146,6 +151,8 @@ Tab_touch = html.Div(
     children= [F_L_filter, F_L_bar_chart], 
     style={'display': 'flex', 'flexDirection': 'row'}, 
 )
+
+
 
 ## Tab for the Sankey diagram
 Conv_filter = html.Div([
@@ -197,9 +204,9 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
 
 
 
-### ----- ----- ----- -----
+### ----- ----- ----- ----- ----- ----- ----- -----
 ### ----- All call backs functions below -----
-### ----- ----- ----- -----
+### ----- ----- ----- ----- ----- ----- ----- -----
 
 
 ## Pivot First/Last Touch count, group by Channel
@@ -217,6 +224,8 @@ def Count_by_Touch(value):
     stat_data['non_conversion_pct'] = round(stat_data.non_conversion/(stat_data.conversion + stat_data.non_conversion)*100, 3)
     stat_data = stat_data.reset_index().rename(columns={touch: 'channel'})
     return stat_data.to_json()
+
+
 
 @callback(
     Output('fig-first_last_count', 'figure'),
@@ -249,30 +258,102 @@ def update_count_fig(data, touch):
 
 @callback(
     Output('fig_conv_count', 'figure'),
-    Output('fig_prom_count', 'figure'),
-    Output('fig_brow_count', 'figure'),
     Input('Radio-First_Last', 'value')
 )
 def update_pie_fig(value):
     def create_pie(val, name):
-        fig = px.pie(values= val, 
-                     names= name, 
-                     hole=.5, 
-                     #textinfo='label+percent',
-                     # #title= "Total count"
-                     )
-        fig.update_traces(hoverinfo='label+percent', textinfo='label+percent')
+        fig = go.Figure(data=[go.Pie(labels=name, 
+                             values=val, 
+                             hole = 0.5,
+                             textinfo='label+value+percent', 
+                             marker_colors = [conv_colors['conversion'], conv_colors['non-conversion']],)
+                    ]
+                )
         fig.update_layout(
-            margin=dict(l=20, r=20, t=20, b=20),
+            title_text = "How many journeys in the dataset?",
+            title_y = 0.95,
+            margin=dict(l=30, r=30, t=130, b=20), 
             showlegend=False,
-            paper_bgcolor=colors['background'] ,
-        )
+            paper_bgcolor=colors['background']
+            )
+        
+        fig.add_annotation(text="Total Journeys", 
+                   xref= "paper", yref= "paper",
+                   x = 0.5, y = 0.55, showarrow = False, 
+                    font=dict(size= 20))
+        
+        fig.add_annotation(text="{:}".format(val[0]+val[1]),
+                           xref= "paper", yref= "paper",
+                           x = 0.5, y = 0.45, showarrow = False,
+                           font=dict(size= 20))
         return fig
 
     fig_conv = create_pie([Data.converters.sum(), Data.nonconverters.sum()], ["Converters","Non Conversters"])
-    fig_prom = create_pie([Data.promotion.sum(), (total_journey - Data.promotion.sum())], ["Promotion","Non Promotion"])
-    fig_brow = create_pie([Data.web.sum(), Data.phone.sum()], ["Web users", "Phone users"])
-    return fig_conv, fig_prom, fig_brow
+    return fig_conv
+
+
+## Graph -- group by channel cnt
+@callback(
+    Output('fig_group_channel_cnt', 'figure'), 
+    Input('Radio-First_Last', 'value')
+)
+def update_channel_cnt_fig(value):
+    df = Data.groupby('channels_count').agg(
+        converters = pd.NamedAgg(column='converters', aggfunc='sum'),
+        nonconverters = pd.NamedAgg(column='nonconverters', aggfunc="sum"),
+        ).reset_index()
+    df['conversion_pct'] = df.converters/(df.converters + df.nonconverters) *100
+    df['non_conversion_pct'] = df.nonconverters/(df.converters + df.nonconverters)*100
+
+    fig = make_subplots(rows=2, cols=1, specs=[[{"type":"scatter"}], [{"type":"bar"}]],
+                    shared_xaxes=True, vertical_spacing=0.03,
+                    row_heights=[0.25, 0.75])
+
+    fig.add_trace(
+        go.Scatter(x = df.channels_count, y = df.conversion_pct, text=df.conversion_pct,
+                mode='lines+markers+text', texttemplate='%{text:.2f}%',textposition='top right',
+                marker=dict(color=conv_colors['conversion']),
+                showlegend=False), 
+        row = 1, col = 1
+    )
+
+    fig.add_trace(
+        go.Bar(x=df.channels_count, y=df.converters, 
+            text=df.converters, texttemplate='%{text:.2s}',
+            marker=dict(color=conv_colors['conversion']),
+            name='conversion'), 
+        row = 2, col = 1
+    )
+    fig.add_trace(
+        go.Bar(x=df.channels_count, y=df.nonconverters,
+            text=df.nonconverters, texttemplate='%{text:.2s}',
+            marker=dict(color=conv_colors['non-conversion']),
+            name='non-conversion'), 
+        row = 2, col = 1
+    )
+
+    fig.update_layout(margin=dict(l=20, r=20, t=50, b=20),
+                    yaxis = dict(showgrid=False, showline=False, showticklabels=False, zeroline=False,
+                                title = 'conversion rate', range = [-.1,2]),
+                    yaxis2 = dict(showgrid=True, showline=False, showticklabels=False, 
+                                    title = 'Count of conversion'),
+                    xaxis = dict(showgrid=False, showline=False, ),
+                    xaxis2 = dict(showgrid=False, showline=False, 
+                                    type='category',title = 'Number of Channels in the Path'),
+                    legend = dict(x = 1, y = 0.75), 
+                    plot_bgcolor= colors['plot_bg'], #'rgb(248, 248, 255)',
+                    title='What is the conversion rate per numbers of channel in the path?',
+                    #font=dict(size=18),
+                    )
+    
+    return fig
+
+
+
+
+
+
+
 
 
 ## Histogram channels in path 
@@ -281,7 +362,8 @@ def update_pie_fig(value):
     Input('Radio-First_Last', 'value')
 )
 def update_histogram_fig(value):
-    fig = px.histogram(Data, x='channels_count', title='Count of Channel in a path')
+    fig = px.histogram(Data, x='channels_count', 
+                       title='What is the count of Channel in a unique path?')
     fig.update_layout(
         margin=dict(l=20, r=20, t=50, b=20),
         paper_bgcolor=colors['background']
@@ -314,12 +396,12 @@ def update_sankey(First, Last, conv):
 
     fig = go.Figure(data=[go.Sankey(
         node = dict(
-        pad = 15,
-        thickness = 20,
-        line = dict(color = "black", width = 0.5),
-        label = [*node,*node],
-        color = "blue"
-        ),
+            #pad = 15,
+            #thickness = 20,
+            #line = dict(color = "black", width = 0.5),
+            label = [*node,*node],
+            #color = "blue"
+            ),
         link = dict(
         source = df.first_touch, 
         target = [x + len(node) for x in df.last_touch],
@@ -330,5 +412,8 @@ def update_sankey(First, Last, conv):
     
     return fig
 
+
+
 if __name__ == "__main__":
+    #app.run_server()
     app.run_server(host="0.0.0.0")
