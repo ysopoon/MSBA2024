@@ -91,7 +91,7 @@ header = html.Div([
                     'width': '70%' }
     ),
     html.H1(
-        children='AdFlow+',
+        children='AdFlow',
         style={
             'textAlign': 'right',
             'color': colors['header'],
@@ -184,7 +184,7 @@ Last_filter = html.Div([
 
 Tab_Sankey = html.Div([
     html.Div([Conv_filter, First_filter, Last_filter]),
-    dcc.Graph( id = 'fig-Sankey', style={'height':'600px'})
+    dcc.Graph( id = 'fig-Sankey', style={'height':'700px', 'width':'1024px'})
 ], style={'display': 'flex', 'flexDirection': 'row'}
 )
 
@@ -197,8 +197,8 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     header,
     dcc.Tabs([
         dcc.Tab(label="Summary", children= Tab_summary), 
-        dcc.Tab(label="Touch Points Analysis", children= Tab_touch),
         dcc.Tab(label="Flow Sankey", children= Tab_Sankey),
+        dcc.Tab(label="Touch Points Analysis", children= Tab_touch),
     ])
 ])
 
