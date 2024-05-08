@@ -146,7 +146,7 @@ header_R = html.Div([
                 'full':'Full Set',
                 'One':'1 Channel only',
                 'Two':'>2 Channels',
-                'custom':'Custom',
+                #'custom':'Custom',
                 },
             value='full', 
             id = 'filter_channel'
@@ -279,7 +279,7 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
 
 ## Channel count filtering
 @callback(
-    Output('filter_channel','value'),
+    #Output('filter_channel','value'),
     Output('filter_channel_cnt','value'),
     Input('filter_channel','value'),
     Input('filter_channel_cnt','value')
@@ -290,11 +290,11 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
     #print(input_id)
     if input_id == 'filter_channel':
         if filter_ch == 'full':
-            filter_ch_cnt = [unique_channel_cnt]
+            filter_ch_cnt = unique_channel_cnt
         elif filter_ch == 'One':
             filter_ch_cnt = [unique_channel_cnt[0]]
         elif filter_ch == 'Two':
-            filter_ch_cnt = [unique_channel_cnt[1:]]
+            filter_ch_cnt = unique_channel_cnt[1:]
     # else:
     #     if set(filter_ch_cnt) == set(unique_channel_cnt):
     #         filter_ch = 'full'
@@ -305,7 +305,8 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
     #     else:
     #         filter_ch = 'custom'
 
-    return filter_ch, filter_ch_cnt
+    #return filter_ch, filter_ch_cnt
+    return filter_ch_cnt
 
 
 ## Data filtered by Channel cnt
