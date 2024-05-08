@@ -36,7 +36,7 @@ model_colors = {
 ### -----  load the data -----
 ### ----- ----- ----- ----- -----
 Data = pd.read_csv('MTA_Input.csv')
-channel = pd.read_csv("NintendoMapping.csv")
+#channel = pd.read_csv("NintendoMapping.csv")
 
 # some counting
 Data['channels_count'] = Data.str_path.apply(lambda x: x.count("&"))
@@ -268,9 +268,9 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
     else:
         if set(filter_ch_cnt) == set(unique_channel_cnt):
             filter_ch = 'full'
-        elif set(filter_ch_cnt) == set([unique_channel_cnt[0]]):
+        elif set(filter_ch_cnt) == set(unique_channel_cnt[0]):
             filter_ch = 'One'
-        elif set(filter_ch_cnt) == set([unique_channel_cnt[1:]]):
+        elif set(filter_ch_cnt) == set(unique_channel_cnt[1:]):
             filter_ch = 'Two'
         else:
             filter_ch = 'custom'
@@ -285,7 +285,6 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
 )
 def Data_by_ChannelCnt(value):
     df = Data[Data['channels_count'].isin(value)]
-    print(df.head())
     return df.to_json()
 
 
@@ -427,28 +426,6 @@ def update_channel_cnt_fig(value):
                     #font=dict(size=18),
                     )
     
-    return fig
-
-
-
-
-
-
-
-
-
-## Histogram channels in path 
-@callback(
-    Output('fig_histogram', 'figure'),
-    Input('Radio-First_Last', 'value')
-)
-def update_histogram_fig(value):
-    fig = px.histogram(Data, x='channels_count', 
-                       title='What is the count of Channel in a unique path?')
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=50, b=20),
-        paper_bgcolor=colors['background']
-    )
     return fig
 
 
