@@ -75,33 +75,8 @@ def str_to_path(str_path):
 Data["path_clean"] = Data.str_path.apply(str_to_path)
 
 
-
-# def runModel(Data):
-#     #ESTIMATE HEURISTIC MODELS (first-/last-/linear- touch models)
-#     H = heuristic_models(Data,"path_clean","converters",
-#                         #var_value = "total_conv_values",
-#                         flg_adv = False)
-
-#     #ESTIMATE MARKOV MODEL
-#     Auto_M = auto_markov_model(Data,
-#                             "path_clean",
-#                             "converters",
-#                             #var_value = "total_conv_values",
-#                             var_null = "nonconverters",
-#                             out_more = True,
-#                             flg_adv = False)
-    
-#     # COMBINE HEURITSTIC & MARKOV
-#     R = pd.merge(H,Auto_M['result'],on="channel_name",how="inner")
-#     R.columns=["channel","first_touch","last_touch","linear_touch","markov_model"]
-#     R = R.sort_values('markov_model', ascending=True)
-
-#     # ESTIMATE TRANSITION MATRIX in ORDER = 1
-#     T = transition_matrix(Data, "path_clean", "converters", var_null = "nonconverters", flg_adv = False)
-
-#     return R, Auto_M['removal_effects'].sort_values('removal_effect'), Auto_M['transition_matrix'], T
-
-
+Data_One = Data[Data['channels_count'] == 1]
+Data_TwoMore = Data[Data['channels_count'] != 1]
 
 
 
@@ -144,21 +119,21 @@ header_R = html.Div([
         dcc.Dropdown(
             options={
                 'full':'Full Set',
-                #'One':'1 Channel only',
+                'One':'1 Channel only',
                 'Two':'>2 Channels',
                 #'custom':'Custom',
                 },
             value='full', 
             id = 'filter_channel'
         ), 
-        dcc.Checklist(
-            options=unique_channel_cnt,
-            value=unique_channel_cnt,
-            inline = True, 
-            id = 'filter_channel_cnt',
-            #style={'display': 'flex', 'flexDirection': 'row'}
-        ),
-        dcc.Store(id='Data_filtered_ch_cnt')
+        # dcc.Checklist(
+        #     options=unique_channel_cnt,
+        #     value=unique_channel_cnt,
+        #     inline = True, 
+        #     id = 'filter_channel_cnt',
+        #     #style={'display': 'flex', 'flexDirection': 'row'}
+        # ),
+        #dcc.Store(id='Data_filtered_ch_cnt')
     ],style={})
 ])
 
@@ -258,6 +233,13 @@ Tab_Sankey = html.Div([
 )
 
 
+## Tab for model output
+Tab_model = html.Div([
+    dcc.Graph(id='fig-model', style={'height':'700px', 'width':'1024px'})
+])
+
+
+
 ### ----- ----- ----- -----
 ### ----- Final Layout -----
 ### ----- ----- ----- -----
@@ -268,6 +250,7 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
         dcc.Tab(label="Summary", children= Tab_summary), 
         dcc.Tab(label="Flow Sankey", children= Tab_Sankey),
         dcc.Tab(label="Touch Points Analysis", children= Tab_touch),
+        dcc.Tab(label="Conversions in the models", children=Tab_model)
     ])
 ])
 
@@ -285,7 +268,7 @@ app.layout = html.Div(style={'backgroundColor': colors['background']}, children=
     Input('filter_channel','value'),
     Input('filter_channel_cnt','value')
 )
-def sync_channel_filters(filter_ch, filter_ch_cnt):
+def sync_channel_filters(filter_ch): #, filter_ch_cnt):
     ctx = callback_context
     input_id = ctx.triggered[0]["prop_id"].split(".")[0]
     #print(input_id)
@@ -310,17 +293,17 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
     return filter_ch_cnt
 
 
-## Data filtered by Channel cnt
-@callback(
-    Output('Data_filtered_ch_cnt', 'data'),
-    Input('filter_channel', 'value')
-)
-def Data_by_ChannelCnt(filter_ch):
-    if filter_ch == 'full':
-        return Data.to_json()
-    elif filter_ch == 'Two':
-        df = Data[Data['channels_count'].isin(unique_channel_cnt[1:])]
-        return df.to_json()
+# ## Data filtered by Channel cnt
+# @callback(
+#     Output('Data_filtered_ch_cnt', 'data'),
+#     Input('filter_channel', 'value')
+# )
+# def Data_by_ChannelCnt(filter_ch):
+#     if filter_ch == 'full':
+#         return Data.to_json()
+#     elif filter_ch == 'Two':
+#         df = Data[Data['channels_count'].isin(unique_channel_cnt[1:])]
+#         return df.to_json()
 
 
 
@@ -371,7 +354,7 @@ def update_count_fig(data, touch):
 
 @callback(
     Output('fig_conv_count', 'figure'),
-    Input('Data_filtered_ch_cnt', 'data'),
+    Input('filter_channel', 'value')
 )
 def update_pie_fig(filtered_data):
     def create_pie(val, name):
@@ -400,7 +383,7 @@ def update_pie_fig(filtered_data):
                            x = 0.5, y = 0.45, showarrow = False,
                            font=dict(size= 20))
         return fig
-    dff = pd.read_json(filtered_data)
+    dff = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
     fig_conv = create_pie([dff.converters.sum(), dff.nonconverters.sum()], ["Converters","Non Conversters"])
     return fig_conv
 
@@ -465,13 +448,13 @@ def update_channel_cnt_fig(value):
 ## Sankey
 @app.callback(
     Output('fig-Sankey', 'figure'),
-    Input('Data_filtered_ch_cnt', 'data'),
+    Input('filter_channel', 'value'),
     Input('filter-First', 'value'), 
     Input('filter-Last', 'value'),
     Input('filter-convert', 'value')
 )
 def update_sankey(filtered_data, First, Last, conv):
-    dff = pd.read_json(filtered_data)
+    dff = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
     df = dff.groupby(['first_touch','last_touch']).agg(
         conv = pd.NamedAgg(column= 'converters', aggfunc='sum'), 
         nonconv = pd.NamedAgg(column= 'nonconverters', aggfunc='sum'),
@@ -507,33 +490,61 @@ def update_sankey(filtered_data, First, Last, conv):
 
 
 
-# @app.callback(
-#     Output('fig-model', 'figure'),
-#     Input('Data_model','data')
-# )
-# def plot_model_conv(df):
-#     fig = go.Figure()
-#     for m in ["markov_model","linear_touch","last_touch","first_touch"]:
-#         fig.add_trace(
-#             go.Bar(x = df[m], y = df['channel'], orientation='h', 
-#                    text = df[m], insidetextanchor="end", texttemplate='%{text:.3s}',
-#                    marker=dict(color=model_colors[m]),
-#                    name = m),
-#         )
-#     fig.update_yaxes(title=None)
-#     fig.update_xaxes(title=None, showticklabels=False)
-#     fig.update_layout(
-#         margin=dict(l=20, r=20, t=70, b=20),
-#         title = 'What is the Conversions by touchpoint in each model? ', 
-#         plot_bgcolor= colors['plot_bg'], 
-#         legend = dict(orientation="h",
-#                     yanchor="bottom", y=1.0,
-#                     xanchor="right", x=1.0, 
-#                     title = None),
-#         legend_traceorder="reversed",
-#         #font=dict(size=18),
-#         )
-#     return fig
+@app.callback(
+    Output('fig-model', 'figure'),
+    Input('filter_channel', 'value'),
+)
+def plot_model_conv(filtered_data):
+    def runModel(Data):
+        #ESTIMATE HEURISTIC MODELS (first-/last-/linear- touch models)
+        H = heuristic_models(Data,"path_clean","converters",
+                            #var_value = "total_conv_values",
+                            flg_adv = False)
+
+        #ESTIMATE MARKOV MODEL
+        Auto_M = auto_markov_model(Data,
+                                "path_clean",
+                                "converters",
+                                #var_value = "total_conv_values",
+                                var_null = "nonconverters",
+                                out_more = True,
+                                flg_adv = False)
+        
+        # COMBINE HEURITSTIC & MARKOV
+        R = pd.merge(H,Auto_M['result'],on="channel_name",how="inner")
+        R.columns=["channel","first_touch","last_touch","linear_touch","markov_model"]
+        R = R.sort_values('markov_model', ascending=True)
+
+        # ESTIMATE TRANSITION MATRIX in ORDER = 1
+        T = transition_matrix(Data, "path_clean", "converters", var_null = "nonconverters", flg_adv = False)
+
+        return R, Auto_M['removal_effects'].sort_values('removal_effect'), Auto_M['transition_matrix'], T
+
+    df = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
+    df, df_RE, df_TM , df_TM1 = runModel(df)
+
+    fig = go.Figure()
+    for m in ["markov_model","linear_touch","last_touch","first_touch"]:
+        fig.add_trace(
+            go.Bar(x = df[m], y = df['channel'], orientation='h', 
+                   text = df[m], insidetextanchor="end", texttemplate='%{text:.3s}',
+                   marker=dict(color=model_colors[m]),
+                   name = m),
+        )
+    fig.update_yaxes(title=None)
+    fig.update_xaxes(title=None, showticklabels=False)
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=70, b=20),
+        title = 'What is the Conversions by touchpoint in each model? ', 
+        plot_bgcolor= colors['plot_bg'], 
+        legend = dict(orientation="h",
+                    yanchor="bottom", y=1.0,
+                    xanchor="right", x=1.0, 
+                    title = None),
+        legend_traceorder="reversed",
+        #font=dict(size=18),
+        )
+    return fig
 
 
 
