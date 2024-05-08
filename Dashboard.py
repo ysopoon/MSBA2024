@@ -42,8 +42,6 @@ Data = pd.read_csv('MTA_Input.csv')
 Data['channels_count'] = Data.str_path.apply(lambda x: x.count("&"))
 Data['users_count'] = Data.user_id.apply(lambda x: x.count(" ")+1)
 
-total_journey = Data.converters.sum()+Data.nonconverters.sum()
-
 unique_channel_cnt = Data.channels_count.sort_values().unique()
 
 df = Data.groupby(['first_touch','last_touch']).agg(
@@ -78,12 +76,44 @@ Data["path_clean"] = Data.str_path.apply(str_to_path)
 
 
 
+def runModel(Data):
+    #ESTIMATE HEURISTIC MODELS (first-/last-/linear- touch models)
+    H = heuristic_models(Data,"path_clean","converters",
+                        #var_value = "total_conv_values",
+                        flg_adv = False)
+
+    #ESTIMATE MARKOV MODEL
+    Auto_M = auto_markov_model(Data,
+                            "path_clean",
+                            "converters",
+                            #var_value = "total_conv_values",
+                            var_null = "nonconverters",
+                            out_more = True,
+                            flg_adv = False)
+    
+    # COMBINE HEURITSTIC & MARKOV
+    R = pd.merge(H,Auto_M['result'],on="channel_name",how="inner")
+    R.columns=["channel","first_touch","last_touch","linear_touch","markov_model"]
+    R = R.sort_values('markov_model', ascending=True)
+
+    # ESTIMATE TRANSITION MATRIX in ORDER = 1
+    T = transition_matrix(Data, "path_clean", "converters", var_null = "nonconverters", flg_adv = False)
+
+    return R, Auto_M['removal_effects'].sort_values('removal_effect'), Auto_M['transition_matrix'], T
+
+
+
+
+
+
+
 ### ----- ----- ----- ----- -----
 ### ----- ----- Dash ----- ----- 
 ### ----- ----- elements ----- ----- 
 ### ----- ----- ----- ----- -----
 
-app = Dash(__name__)
+#app = Dash(__name__)
+app = Dash(prevent_initial_callbacks="initial_duplicate")
 server = app.server
 
 
@@ -260,20 +290,20 @@ def sync_channel_filters(filter_ch, filter_ch_cnt):
     #print(input_id)
     if input_id == 'filter_channel':
         if filter_ch == 'full':
-            filter_ch_cnt = unique_channel_cnt
+            filter_ch_cnt = [unique_channel_cnt]
         elif filter_ch == 'One':
             filter_ch_cnt = [unique_channel_cnt[0]]
         elif filter_ch == 'Two':
-            filter_ch_cnt = unique_channel_cnt[1:]
-    else:
-        if set(filter_ch_cnt) == set(unique_channel_cnt):
-            filter_ch = 'full'
-        elif set(filter_ch_cnt) == set(unique_channel_cnt[0]):
-            filter_ch = 'One'
-        elif set(filter_ch_cnt) == set(unique_channel_cnt[1:]):
-            filter_ch = 'Two'
-        else:
-            filter_ch = 'custom'
+            filter_ch_cnt = [unique_channel_cnt[1:]]
+    # else:
+    #     if set(filter_ch_cnt) == set(unique_channel_cnt):
+    #         filter_ch = 'full'
+    #     elif set(filter_ch_cnt) == set(unique_channel_cnt[0]):
+    #         filter_ch = 'One'
+    #     elif set(filter_ch_cnt) == set(unique_channel_cnt[1:]):
+    #         filter_ch = 'Two'
+    #     else:
+    #         filter_ch = 'custom'
 
     return filter_ch, filter_ch_cnt
 
@@ -430,7 +460,7 @@ def update_channel_cnt_fig(value):
 
 
 ## Sankey
-@callback(
+@app.callback(
     Output('fig-Sankey', 'figure'),
     Input('Data_filtered_ch_cnt', 'data'),
     Input('filter-First', 'value'), 
@@ -470,6 +500,36 @@ def update_sankey(filtered_data, First, Last, conv):
 
     fig.update_layout(title_text= conv + " From First Touch to Last Touch")
     
+    return fig
+
+
+
+@app.callback(
+    Output('fig-model', 'figure'),
+    Input('Data_model','data')
+)
+def plot_model_conv(df):
+    fig = go.Figure()
+    for m in ["markov_model","linear_touch","last_touch","first_touch"]:
+        fig.add_trace(
+            go.Bar(x = df[m], y = df['channel'], orientation='h', 
+                   text = df[m], insidetextanchor="end", texttemplate='%{text:.3s}',
+                   marker=dict(color=model_colors[m]),
+                   name = m),
+        )
+    fig.update_yaxes(title=None)
+    fig.update_xaxes(title=None, showticklabels=False)
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=70, b=20),
+        title = 'What is the Conversions by touchpoint in each model? ', 
+        plot_bgcolor= colors['plot_bg'], 
+        legend = dict(orientation="h",
+                    yanchor="bottom", y=1.0,
+                    xanchor="right", x=1.0, 
+                    title = None),
+        legend_traceorder="reversed",
+        #font=dict(size=18),
+        )
     return fig
 
 
