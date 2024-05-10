@@ -177,22 +177,23 @@ Tab_summary = html.Div(
 
 ## Tab for analysis by first/last touch
 ## see call back function below
-F_L_filter = html.Div([
-    dcc.RadioItems(
-        options = ['First Touch', 'Last Touch'], 
-        value = 'First Touch', 
-        id = 'Radio-First_Last'
-    ),
-    dcc.Store(id='intermediate-value')
-])
+# F_L_filter = html.Div([
+#     dcc.RadioItems(
+#         options = ['First Touch', 'Last Touch'], 
+#         value = 'First Touch', 
+#         id = 'Radio-First_Last'
+#     ),
+#     dcc.Store(id='intermediate-value')
+# ])
 
 F_L_bar_chart = html.Div([
-    dcc.Graph( id = 'fig-first_last_count' )
+    dcc.Graph( id = 'fig-first_last_count', style={ 'height':'700px', 'width':'1024px' })
 ])
 
 
 Tab_touch = html.Div(
-    children= [F_L_filter, F_L_bar_chart], 
+    children= [#F_L_filter, 
+               F_L_bar_chart], 
     style={'display': 'flex', 'flexDirection': 'row'}, 
 )
 
@@ -307,49 +308,129 @@ def sync_channel_filters(filter_ch): #, filter_ch_cnt):
 
 
 
-## Pivot First/Last Touch count, group by Channel
-@callback(
-    Output('intermediate-value', 'data'),
-    Input('Radio-First_Last', 'value')
-)
-def Count_by_Touch(value):
-    touch = 'first_touch' if value == 'First Touch' else 'last_touch'
-    stat_data = Data.groupby(touch).agg(
-        path_count = pd.NamedAgg(column='path_id', aggfunc='count'),
-        conversion = pd.NamedAgg(column='converters', aggfunc='sum'),
-        non_conversion = pd.NamedAgg(column='nonconverters', aggfunc="sum"))
-    stat_data['conversion_pct'] = round(stat_data.conversion/(stat_data.conversion + stat_data.non_conversion) *100, 3)
-    stat_data['non_conversion_pct'] = round(stat_data.non_conversion/(stat_data.conversion + stat_data.non_conversion)*100, 3)
-    stat_data = stat_data.reset_index().rename(columns={touch: 'channel'})
-    return stat_data.to_json()
+# ## Pivot First/Last Touch count, group by Channel
+# @callback(
+#     Output('intermediate-value', 'data'),
+#     Input('Radio-First_Last', 'value')
+# )
+# def Count_by_Touch(value):
+#     touch = 'first_touch' if value == 'First Touch' else 'last_touch'
+#     stat_data = Data.groupby(touch).agg(
+#         path_count = pd.NamedAgg(column='path_id', aggfunc='count'),
+#         conversion = pd.NamedAgg(column='converters', aggfunc='sum'),
+#         non_conversion = pd.NamedAgg(column='nonconverters', aggfunc="sum"))
+#     stat_data['conversion_pct'] = round(stat_data.conversion/(stat_data.conversion + stat_data.non_conversion) *100, 3)
+#     stat_data['non_conversion_pct'] = round(stat_data.non_conversion/(stat_data.conversion + stat_data.non_conversion)*100, 3)
+#     stat_data = stat_data.reset_index().rename(columns={touch: 'channel'})
+#     return stat_data.to_json()
 
 
 
-@callback(
-    Output('fig-first_last_count', 'figure'),
-    Input('intermediate-value', 'data'),
-    Input('Radio-First_Last', 'value')
-)
-def update_count_fig(data, touch):
-    dff = pd.read_json(data)
-    fig = px.bar(dff, 
-                 x=['non_conversion','conversion'], 
-                 y='channel', 
-                 title='Count of conversion by '+touch, 
-                 text_auto= ".2s",
-                 orientation='h')
+# @callback(
+#     Output('fig-first_last_count', 'figure'),
+#     Input('intermediate-value', 'data'),
+#     Input('Radio-First_Last', 'value')
+# )
+# def update_count_fig(data, touch):
+#     dff = pd.read_json(data)
+#     fig = px.bar(dff, 
+#                  x=['non_conversion','conversion'], 
+#                  y='channel', 
+#                  title='Count of conversion by '+touch, 
+#                  text_auto= ".2s",
+#                  orientation='h')
     
-    fig.update_yaxes(title=None)
-    fig.update_xaxes(title=None, showticklabels=False)
+#     fig.update_yaxes(title=None)
+#     fig.update_xaxes(title=None, showticklabels=False)
+#     fig.update_layout(
+#         margin=dict(l=20, r=20, t=50, b=20),
+#         paper_bgcolor=colors['background'] ,
+#         legend = dict(orientation="h",
+#                       yanchor="bottom", y=1.0,
+#                       xanchor="right", x=1.0, 
+#                       title = None)
+#     )
+#     return fig
+
+
+
+
+@app.callback(
+    Output('fig-first_last_count', 'figure'),
+    Input('filter_channel', 'value'),
+)
+def Update_first_Last_graph(filtered_data):
+    def stat(data, touch):
+        stat_data = data.groupby(touch).agg(
+            conversion = pd.NamedAgg(column='converters', aggfunc='sum'),
+            non_conversion = pd.NamedAgg(column='nonconverters', aggfunc="sum")
+        )
+        stat_data['conversion_pct'] = stat_data.conversion/(stat_data.conversion + stat_data.non_conversion) *100
+        stat_data['non_conversion_pct'] = stat_data.non_conversion/(stat_data.conversion + stat_data.non_conversion)*100
+        return stat_data.reset_index().rename(columns={touch: 'channel'}).sort_values('conversion')
+    
+    data = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
+    dff = stat(data, 'first_touch')
+    dff_l = stat(data, 'last_touch')
+
+    fig = make_subplots(rows=1, cols=2, specs=[[{},{}]], shared_xaxes = True, shared_yaxes = False, vertical_spacing=0.001)
+    fig.append_trace(
+        go.Bar(x=dff_l.conversion, y=dff_l.channel, orientation='h', 
+               text=dff_l.conversion, insidetextanchor="end",
+               marker=dict(color='rgba(50, 171, 96, 0.6)',line=dict(color='rgba(50, 171, 96, 0.6)', width=1),),
+               name='Last Touch -- count of conversion', legend="legend2"),
+        1, 1
+    )
+    fig.append_trace(
+        go.Bar(x=dff.conversion, y=dff.channel, orientation='h', 
+               text=dff.conversion, insidetextanchor="end",
+               marker=dict(color='rgba(128, 0, 128, 0.6)',line=dict(color='rgba(128, 0, 128, 0.6)', width=1),),
+               name='First Touch -- count of conversion'),
+        1, 1
+    )
+
+    fig.append_trace(
+            go.Scatter(x=dff_l.conversion_pct, y = dff_l.channel, orientation='h',
+                    mode='lines+markers+text', 
+                    text=dff_l.conversion_pct, texttemplate='%{text:.2f}%',textposition='top right',
+                    line_color='rgb(50, 171, 96)', textfont_color='rgb(50, 171, 96)',
+                    name='Last Touch -- conversion rate', legend="legend2"), 
+            1, 2
+        )
+    fig.append_trace(
+        go.Scatter(x=dff.conversion_pct, y = dff.channel, orientation='h',
+                   mode='lines+markers+text', 
+                   text=dff.conversion_pct, texttemplate='%{text:.2f}%',textposition='bottom right',
+                   line_color='rgb(128, 0, 128)', textfont_color='rgb(128, 0, 128)',
+                   name='First Touch -- conversion rate'), 
+        1, 2
+    )
+    
+    add_title = "(Paths with only one channel)" if filtered_data == 'One' else "(Paths with >2 channels)" \
+        if filtered_data == 'Two' else "(Full dataset)"
+
     fig.update_layout(
         margin=dict(l=20, r=20, t=50, b=20),
-        paper_bgcolor=colors['background'] ,
-        legend = dict(orientation="h",
-                      yanchor="bottom", y=1.0,
-                      xanchor="right", x=1.0, 
-                      title = None)
+        title='What is the Conversions by First-/Last- Touch?<br>' + add_title , 
+        yaxis = dict(showgrid=False, showline=False, showticklabels=True, domain=[0,0.95],),
+        yaxis2 = dict(showgrid=False, showline=True, showticklabels=False, domain=[0,0.95],linecolor='rgba(102, 102, 102, 0.8)',
+        linewidth=2,), 
+        xaxis = dict(zeroline=False, showline=False, showticklabels=False, showgrid=True, domain=[0,0.42]),
+        xaxis2 = dict(zeroline=False, showline=False, showticklabels=False, showgrid=True, domain=[0.47, 1], range = [0, max(dff.conversion_pct)+1]),
+        legend = dict(x=0.4, y=1.138, font_size =10), 
+        legend2 = dict(x=0.7, y=1.138, font_size =10), 
+        paper_bgcolor=colors['plot_bg'], #'rgb(248, 248, 255)',
+        plot_bgcolor=colors['plot_bg'], #'rgb(248, 248, 255)',
     )
+
     return fig
+
+
+
+
+
+
+
 
 
 @callback(
@@ -357,7 +438,7 @@ def update_count_fig(data, touch):
     Input('filter_channel', 'value')
 )
 def update_pie_fig(filtered_data):
-    def create_pie(val, name):
+    def create_pie(val, name, title):
         fig = go.Figure(data=[go.Pie(labels=name, 
                              values=val, 
                              hole = 0.5,
@@ -366,7 +447,7 @@ def update_pie_fig(filtered_data):
                     ]
                 )
         fig.update_layout(
-            title_text = "How many journeys in the dataset?",
+            title_text = "How many journeys in the dataset? " + title ,
             title_y = 0.95,
             margin=dict(l=30, r=30, t=130, b=20), 
             showlegend=False,
@@ -384,14 +465,16 @@ def update_pie_fig(filtered_data):
                            font=dict(size= 20))
         return fig
     dff = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
-    fig_conv = create_pie([dff.converters.sum(), dff.nonconverters.sum()], ["Converters","Non Conversters"])
+    add_title = "(Paths with only one channel)" if filtered_data == 'One' else "(Paths with >2 channels)" \
+        if filtered_data == 'Two' else "(Full dataset)"
+    fig_conv = create_pie([dff.converters.sum(), dff.nonconverters.sum()], ["Converters","Non Conversters"], add_title)
     return fig_conv
 
 
 ## Graph -- group by channel cnt
 @callback(
     Output('fig_group_channel_cnt', 'figure'), 
-    Input('Radio-First_Last', 'value')
+    Input('filter_channel', 'value')
 )
 def update_channel_cnt_fig(value):
     df = Data.groupby('channels_count').agg(
@@ -484,7 +567,9 @@ def update_sankey(filtered_data, First, Last, conv):
         value = df.conv if conv == 'Converters' else df.nonconv if conv == 'Non Converters' else df.cnt
     ))])
 
-    fig.update_layout(title_text= conv + " From First Touch to Last Touch")
+    add_title = "(Paths with only one channel)" if filtered_data == 'One' else "(Paths with >2 channels)" \
+        if filtered_data == 'Two' else "(Full dataset)"
+    fig.update_layout(title_text= conv + " From First Touch to Last Touch " + add_title)
     
     return fig
 
@@ -520,6 +605,9 @@ def plot_model_conv(filtered_data):
 
         return R, Auto_M['removal_effects'].sort_values('removal_effect'), Auto_M['transition_matrix'], T
 
+    add_title = "(Paths with only one channel)" if filtered_data == 'One' else "(Paths with >2 channels)" \
+        if filtered_data == 'Two' else "(Full dataset)"
+    
     df = Data_One if filtered_data == 'One' else Data_TwoMore if filtered_data == 'Two' else Data
     df, df_RE, df_TM , df_TM1 = runModel(df)
 
@@ -535,7 +623,7 @@ def plot_model_conv(filtered_data):
     fig.update_xaxes(title=None, showticklabels=False)
     fig.update_layout(
         margin=dict(l=20, r=20, t=70, b=20),
-        title = 'What is the Conversions by touchpoint in each model? ', 
+        title = 'What is the Conversions by touchpoint in each model? ' + add_title, 
         plot_bgcolor= colors['plot_bg'], 
         legend = dict(orientation="h",
                     yanchor="bottom", y=1.0,
